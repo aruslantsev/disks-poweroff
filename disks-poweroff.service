@@ -1,0 +1,9 @@
+[Unit]
+Description=disks-poweroff service
+[Service]
+Type=simple
+ExecStart=/usr/libexec/platform-python /usr/bin/disks-poweroff.py /etc/disks-poweroff.conf
+Restart=always
+RestartSec=2s
+[Install]
+WantedBy=multi-user.target
