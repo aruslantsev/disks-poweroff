@@ -24,10 +24,10 @@ import time
 PROGRAM_NAME = "disks-poweroff"
 DEVICES = "devices"
 TIMEOUT = "timeout"
-POLLING_INTERVAL = "polling-interval"
+POLLING_INTERVAL = "polling_interval"
 
 DEFAULT_TIMEOUT = 1800
-DEFAULT_POLLING_INTERVAL = 5
+DEFAULT_POLLING_INTERVAL = 10
 
 ACTIVE = "ACTIVE"
 IDLE = "IDLE"
@@ -42,7 +42,7 @@ class DiskState:
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(state='{self.state}', timestamp={self.timestamp})"
 
-    def eq(self, other: Any) -> bool:
+    def __eq__(self, other: Any) -> bool:
         if isinstance(other, DiskState):
             return self.state == other.state
         return False
@@ -59,11 +59,11 @@ class DiskSectors:
             + f"(sectors_read={self.sectors_read}, sectors_written={self.sectors_written})"
         )
 
-    def eq(self, other: Any) -> bool:
+    def __eq__(self, other: Any) -> bool:
         if isinstance(other, DiskSectors):
             return (
                 (self.sectors_read == other.sectors_read)
-                & (self.sectors_written == other.sectors_written)
+                and (self.sectors_written == other.sectors_written)
             )
 
         return False
@@ -137,7 +137,7 @@ class DisksPowerOff:
                     + f"setting default value {DEFAULT_TIMEOUT} seconds"
                 )
             )
-            self.timeout = 1800
+            self.timeout = DEFAULT_TIMEOUT
 
         # Polling interval in seconds
         polling_interval = config[PROGRAM_NAME].get(
@@ -153,7 +153,15 @@ class DisksPowerOff:
                     + f"setting default value {DEFAULT_POLLING_INTERVAL} seconds"
                 )
             )
-            self.polling_interval = 5
+            self.polling_interval = DEFAULT_POLLING_INTERVAL
+
+        syslog.syslog(
+            syslog.LOG_INFO, 
+            (
+                "Running with parameters: "
+                + f"timeout={self.timeout}, polling_interval={self.polling_interval}"
+            )
+        )
 
         self.diskstats: Dict[str, DiskSectors] = {}
         self.diskstats_prev: Dict[str, DiskSectors] = {}
@@ -207,14 +215,14 @@ class DisksPowerOff:
                     )
                     and (time.time() - disk_state.timestamp >= self.timeout)
                 ):
-                    # Recheck if disk is sleeping every time. It may wake up unexpectedly sometimes
+                    # Recheck if disk is sleeping every time. It may wake up unexpectedly
                     smartctl = subprocess.Popen(
                         ["smartctl", "-n", "standby", f"/dev/{disk}"],
                         stdout=subprocess.DEVNULL,
                         stderr=subprocess.STDOUT)
                     smartctl.communicate()
 
-                    if smartctl.returncode != 2:  # sleeping
+                    if smartctl.returncode != 2:  # not sleeping
                         # WARNING: also returncode == 2 when smartctl failed
                         hdparm = subprocess.Popen(
                             ["hdparm", "-yY", f"/dev/{disk}"],
