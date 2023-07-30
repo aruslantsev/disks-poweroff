@@ -1,5 +1,5 @@
 # disks-poweroff
 
-Tool for turning off HDDs if power management using hdparm is ineffective. This tool checks if 
-any data have been read or written to disk and executes ```hdparm -yY $device``` for selected 
-devices after timeout.
+Tool for turning off HDDs if power management via hdparm is ineffective. This tool checks if 
+any amount of data have been read or written to disk and executes ```hdparm -yY $device``` 
+for the selected devices after the timeout.
