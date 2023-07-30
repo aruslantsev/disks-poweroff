@@ -18,7 +18,7 @@ import re
 import subprocess
 import sys
 import syslog
-from typing import Tuple, Dict
+from typing import Tuple, Dict, Any
 import time
 
 PROGRAM_NAME = "disks-poweroff"
@@ -39,11 +39,34 @@ class DiskState:
         self.state = state
         self.timestamp = timestamp
 
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(state='{self.state}', timestamp={self.timestamp})"
+
+    def eq(self, other: Any) -> bool:
+        if isinstance(other, DiskState):
+            return self.state == other.state
+        return False
+
 
 class DiskSectors:
     def __init__(self, sectors_read: str, sectors_written: str):
         self.sectors_read = sectors_read
         self.sectors_written = sectors_written
+
+    def __repr__(self):
+        return (
+            f"{self.__class__.__name__}"
+            + f"(sectors_read={self.sectors_read}, sectors_written={self.sectors_written})"
+        )
+
+    def eq(self, other: Any) -> bool:
+        if isinstance(other, DiskSectors):
+            return (
+                (self.sectors_read == other.sectors_read)
+                & (self.sectors_written == other.sectors_written)
+            )
+
+        return False
 
 
 def parse_diskstats_line(line: str) -> Tuple[str, str, str]:
