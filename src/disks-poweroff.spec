@@ -1,5 +1,5 @@
 Name:       disks-poweroff
-Version:    0.4
+Version:    0.5
 Release:    1%{?dist}
 Summary:    Stop inactive disks
 License:    GPLv3+
@@ -26,6 +26,9 @@ install -D -m 755 disks-poweroff.py %{buildroot}%{_bindir}/disks-poweroff.py
 %config %{_sysconfdir}/disks-poweroff.conf
 
 %changelog
+* Sun Jul 30 2023 Andrei Ruslantsev - 0.5
+- Refactor code
+
 * Wed Mar 16 2022 Andrei Ruslantsev - 0.4
 - Fix typos
 
