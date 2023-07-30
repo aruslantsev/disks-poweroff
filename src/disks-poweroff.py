@@ -110,7 +110,7 @@ class DisksPowerOff:
         config.read(configfile)
 
         # Find all physical disks. Read disks from config. If none passed, use all
-        possible_devices = [dev for dev in os.listdir('/dev') if re.match("[sh]d[a-z]\Z", dev)]
+        possible_devices = [dev for dev in os.listdir('/dev') if re.match(r"[sh]d[a-z]\Z", dev)]
         try:
             disks = config[PROGRAM_NAME][DEVICES].strip().split(",")
         except KeyError:
@@ -156,7 +156,7 @@ class DisksPowerOff:
             self.polling_interval = DEFAULT_POLLING_INTERVAL
 
         syslog.syslog(
-            syslog.LOG_INFO, 
+            syslog.LOG_INFO,
             (
                 "Running with parameters: "
                 + f"timeout={self.timeout}, polling_interval={self.polling_interval}"
