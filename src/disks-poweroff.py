@@ -20,7 +20,6 @@ import sys
 import syslog
 from typing import Tuple, Dict
 import time
-from dataclasses import dataclass
 
 PROGRAM_NAME = "disks-poweroff"
 DEVICES = "devices"
@@ -35,16 +34,16 @@ IDLE = "IDLE"
 POWEROFF = "POWEROFF"
 
 
-@dataclass
 class DiskState:
-    state: str
-    timestamp: float
+    def __init__(self, state: str, timestamp: float):
+        self.state = state
+        self.timestamp = timestamp
 
 
-@dataclass
 class DiskSectors:
-    sectors_read: str
-    sectors_written: str
+    def __init__(self, sectors_read: str, sectors_written: str):
+        self.sectors_read = sectors_read
+        self.sectors_written = sectors_written
 
 
 def parse_diskstats_line(line: str) -> Tuple[str, str, str]:
