@@ -15,6 +15,9 @@ If not, see <https://www.gnu.org/licenses/>.
 
 #include <tuple>
 #include <string>
+#include <iostream>
+#include <chrono>
+#include <thread>
 #include <boost/algorithm/string.hpp>
 #include <boost/regex.hpp>
 
@@ -26,22 +29,19 @@ enum states {
 };
 
 
-struct DiskState
-{
+struct DiskState {
     enum states state;
     double timestamp;
 };
 
 
-struct DiskSectors
-{
+struct DiskSectors {
     std::string sectors_read;
     std::string sectors_written;
 };
 
 
-std::tuple<std::string, std::string, std::string> parse_line(std::string line)
-{
+std::tuple<std::string, std::string, std::string> parse_line(std::string line) {
     /*
     Parses line and returns device, sectors read and sectors written
     8       0 sda 19912 11150 4603573 10996 76961 88315 4666256 72070 0 92637 83075 0 0 0 0 13 8
@@ -56,6 +56,7 @@ std::tuple<std::string, std::string, std::string> parse_line(std::string line)
 
     std::vector<std::string> splitted;
     line = boost::regex_replace(line, boost::regex("[' ']{2,}"), " ");
+    boost::algorithm::trim(line);
     boost::split(splitted, line, boost::is_any_of(" "));
     std::string &diskname = splitted[2];
     std::string &sectors_read = splitted[5];
@@ -64,14 +65,53 @@ std::tuple<std::string, std::string, std::string> parse_line(std::string line)
 };
 
 
-std::string normalize_name(std::string disk)
-{
+std::string normalize_name(std::string disk) {
     std::vector<std::string> splitted;
     boost::algorithm::trim(disk);
     boost::algorithm::to_lower(disk);
     boost::split(splitted, disk, boost::is_any_of("/"));
     return splitted.back();
 };
+
+
+class DisksPoweroff {
+    public:
+        int polling_interval;
+        std::vector<std::string> devices;
+        DisksPoweroff(std::string config_path)
+        {
+        };
+        void parse_stats(){};
+        void compare_state(){};
+        void send_cmd(){};
+        void run(){
+            while (true) {
+                parse_stats();
+                compare_state();
+                send_cmd();
+                polling_interval = 5;
+                std::cout << "Cycle\n";
+                std::this_thread::sleep_for(std::chrono::seconds(polling_interval));
+            }
+        };
+};
+
+
+int main(int argc, char *argv[]) {
+    if (argc != 2) {
+        std::cout << "Usage: " << argv[0] << " config_path" << "\n";
+        return 1;
+    }
+    std::string disk, written, read;
+
+    DisksPoweroff disks_poweroff(argv[1]);
+    disks_poweroff.run();
+
+    tie(disk, read, written) = parse_line(" 253       0 dm-0 4427735 0 764012960 1975224 10010485 0 1190249536 120592768 0 7406036 122645676 136166 0 460220616 77684 0 0");
+    std::cout << disk << " " << read << " " <<  written << "\n";
+    std::cout << normalize_name("/dev/SDA ") << "\n";
+    return 0;
+}
 
 
 
@@ -225,19 +265,4 @@ class DisksPowerOff:
                     # sectors increases after smartctl or hdparm call.
                     # For example, my Samsung 850 EVO needs this.
 
-    def run(self):
-        while True:
-            self.poll()
-            self.compare()
-            self.poweroff()
-            time.sleep(self.polling_interval)
-
-
-def main():
-    disks_poweroff = DisksPowerOff(sys.argv[1])
-    disks_poweroff.run()
-
-
-if __name__ == "__main__":
-    main()
 */
