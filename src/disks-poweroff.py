@@ -18,8 +18,8 @@ import re
 import subprocess
 import sys
 import syslog
-from typing import Tuple, Dict, Any
 import time
+from typing import Any, Dict, Tuple
 
 PROGRAM_NAME = "disks-poweroff"
 DEVICES = "devices"
@@ -71,7 +71,7 @@ class DiskSectors:
 
 def parse_diskstats_line(line: str) -> Tuple[str, str, str]:
     """
-    Parses line like foillowing
+    Parses line from diskstats
     8       0 sda 19912 11150 4603573 10996 76961 88315 4666256 72070 0 92637 83075 0 0 0 0 13 8
     ==  ===================================
      1  major number
@@ -85,7 +85,6 @@ def parse_diskstats_line(line: str) -> Tuple[str, str, str]:
     :return: sectors_read
     :return: sectors_written
     """
-
     # remove multiple spaces
     line = re.sub(' +', ' ', line).strip().split(' ')
     device_name = line[2]
@@ -109,7 +108,8 @@ class DisksPowerOff:
         config = configparser.ConfigParser()
         config.read(configfile)
 
-        # Find all physical disks. Read disks from config. If none passed, use all
+        # Find all physical disks, read disks from config, find intersection.
+        # If none drives passed in config, use all found
         possible_devices = [dev for dev in os.listdir('/dev') if re.match(r"[sh]d[a-z]\Z", dev)]
         try:
             disks = config[PROGRAM_NAME][DEVICES].strip().split(",")
@@ -125,7 +125,7 @@ class DisksPowerOff:
 
         syslog.syslog(syslog.LOG_INFO, f"Working with disks: {', '.join(self.disks)}")
 
-        # If the disk is idle during timeout, we will turn it off
+        # If the disk state is idle during timeout, it will be turned off
         timeout = config[PROGRAM_NAME].get(TIMEOUT, str(DEFAULT_TIMEOUT))
         try:
             self.timeout = int(timeout)
@@ -142,7 +142,7 @@ class DisksPowerOff:
         # Polling interval in seconds
         polling_interval = config[PROGRAM_NAME].get(
             POLLING_INTERVAL, str(DEFAULT_POLLING_INTERVAL)
-        )  # 5 seconds
+        )
         try:
             self.polling_interval = int(polling_interval)
         except ValueError:
@@ -167,7 +167,7 @@ class DisksPowerOff:
         self.diskstats_prev: Dict[str, DiskSectors] = {}
         self.disk_states: Dict[str, DiskState] = {}
 
-    def poll(self):
+    def parse_stats(self):
         """Checks if any bytes were read of written to disk"""
         self.diskstats_prev = copy.deepcopy(self.diskstats)
         self.diskstats = {}
@@ -181,7 +181,7 @@ class DisksPowerOff:
                         sectors_written=sectors_written
                     )
 
-    def compare(self):
+    def compare_stats(self):
         """Compare disk stats"""
         for disk in self.disks:
             # stats (sectors written or sectors read) not changed and not empty
@@ -204,7 +204,7 @@ class DisksPowerOff:
                     self.disk_states[disk] = DiskState(state=ACTIVE, timestamp=time.time())
                     syslog.syslog(syslog.LOG_DEBUG, f"Disk {disk} state changed to {ACTIVE}")
 
-    def poweroff(self):
+    def send_cmd(self):
         for disk in self.disks:
             if disk in self.disk_states:
                 disk_state = self.disk_states[disk]
@@ -243,9 +243,9 @@ class DisksPowerOff:
 
     def run(self):
         while True:
-            self.poll()
-            self.compare()
-            self.poweroff()
+            self.parse_stats()
+            self.compare_stats()
+            self.send_cmd()
             time.sleep(self.polling_interval)
 
 
