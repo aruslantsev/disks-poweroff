@@ -14,8 +14,10 @@ If not, see <https://www.gnu.org/licenses/>.
 */
 
 #include <tuple>
+#include <map>
 #include <string>
 #include <iostream>
+#include <fstream>
 #include <chrono>
 #include <thread>
 #include <filesystem>
@@ -48,12 +50,24 @@ enum states {
 struct DiskState {
     enum states state;
     double timestamp;
+
+    DiskState() {};
+    DiskState(states init_state, double init_timestamp) {
+        state = init_state;
+        timestamp = init_timestamp;
+    };
 };
 
 
 struct DiskSectors {
     std::string sectors_read;
     std::string sectors_written;
+
+    DiskSectors () {};
+    DiskSectors(std::string init_sectors_read, std::string init_sectors_written) {
+        sectors_read = init_sectors_read;
+        sectors_written = init_sectors_written;
+    };
 };
 
 
@@ -69,7 +83,6 @@ std::tuple<std::string, std::string, std::string> parse_line(std::string line) {
     10  sectors written
     ==  ===================================
     */
-
     std::vector<std::string> splitted;
     line = boost::regex_replace(line, boost::regex("[' ']{2,}"), " ");
     boost::algorithm::trim(line);
@@ -98,6 +111,8 @@ class DisksPoweroff {
         int polling_interval;
         int timeout;
         std::vector<std::string> devices;
+        std::map<std::string, DiskSectors> diskstats, diskstats_prev;
+        std::map<std::string, DiskState> disk_states;
 
         DisksPoweroff(std::string config_path) {
             // parse config
@@ -107,43 +122,76 @@ class DisksPoweroff {
             // get all parameters from config
             polling_interval = property_tree.get<int>("disks_poweroff.polling_interval", DEFAULT_POLLING_INTERVAL);
             timeout = property_tree.get<int>("disks_poweroff.timeout", DEFAULT_TIMEOUT);
-            std::string devices_string = property_tree.get<std::string>("disks_poweroff.devices", std::string());
-            std::vector<std::string> config_devices = boost::split(devices, devices_string, boost::is_any_of(","));
 
             // find all disks in /dev
             std::vector<std::string> available_devices;
             for (const auto & entry : std::filesystem::directory_iterator("/dev")) {
                 std::string device = entry.path();
                 device = normalize_name(device);
-                if (boost::regex_match(device, boost::regex("[sh]d[a-z]")))
+                // if (boost::regex_match(device, boost::regex("[sh]d[a-z]")))
+                if (boost::regex_match(device, boost::regex("dm-[0-9]")))
                     available_devices.push_back(device);
             };
 
+            std::cout << "Available devices: " << join(available_devices.begin(), available_devices.end(), ", ") << std::endl;
+
             // intersect config devices and available disks
-            if (config_devices.size() == 0)
+            std::vector<std::string> config_devices;
+            std::string devices_string = property_tree.get<std::string>("disks_poweroff.devices", std::string());
+            if (devices_string != "") {
+                config_devices = boost::split(devices, devices_string, boost::is_any_of(","));
+            } else {
+                std::cout << "Devices section in config is empty" << std::endl;
                 config_devices = available_devices;
+            };
+
+            std::cout << "Devices in config: " << join(config_devices.begin(), config_devices.end(), ", ") << std::endl;
 
             for (const auto & element : available_devices) {
                 if (std::find(config_devices.begin(), config_devices.end(), element) != config_devices.end())
                     devices.push_back(element);
             };
-            BOOST_LOG_TRIVIAL(info) << "Starting disks_poweroff";
-            BOOST_LOG_TRIVIAL(info) << "polling interval: " << polling_interval << ", timeout: " << timeout;
-            BOOST_LOG_TRIVIAL(info) << "devices: " << join(devices.begin(), devices.end(), ", ");
+            // BOOST_LOG_TRIVIAL(info) << "Starting disks_poweroff";
+            std::cout << "Starting disks_poweroff" << std::endl;
+            std::cout << "polling interval: " << polling_interval << ", timeout: " << timeout << std::endl;
+            std::cout << "devices: " << join(devices.begin(), devices.end(), ", ") << std::endl;
+
+            config_devices.clear();
+            available_devices.clear();
+            
+            // delete &config_devices;
+            // delete &available_devices;
         };
 
-        void parse_stats() {};
+        void parse_stats() {
+            diskstats_prev.clear();
+            for (const auto &elem : diskstats) {
+                diskstats_prev[elem.first] = elem.second;
+            }
+            diskstats.clear();
+
+            std::string line;
+            std::ifstream infile("/proc/diskstats");
+            std::string device, sectors_read, sectors_written;
+            while (std::getline(infile, line)) {
+                tie(device, sectors_read, sectors_written) = parse_line(line);
+                if (std::find(devices.begin(), devices.end(), device) != devices.end()) {
+                    diskstats[device] = DiskSectors(sectors_read, sectors_written);
+                }
+            }
+
+        };
 
         void compare_state() {};
 
         void send_cmd() {};
 
-        void run(){
+        void run() {
             while (true) {
                 parse_stats();
                 compare_state();
                 send_cmd();
-                polling_interval = 5;
+                polling_interval = 5;  // FIXME
                 std::this_thread::sleep_for(std::chrono::seconds(polling_interval));
             }
         };
@@ -178,25 +226,6 @@ int main(int argc, char *argv[]) {
 /*
 
 class DisksPowerOff:
-    def __init__(self, configfile: str):
-        """Parse config"""
-        self.diskstats: Dict[str, DiskSectors] = {}
-        self.diskstats_prev: Dict[str, DiskSectors] = {}
-        self.disk_states: Dict[str, DiskState] = {}
-
-    def poll(self):
-        """Checks if any bytes were read of written to disk"""
-        self.diskstats_prev = copy.deepcopy(self.diskstats)
-        self.diskstats = {}
-
-        with open("/proc/diskstats", "r") as fd:
-            for line in fd.readlines():
-                disk, sectors_read, sectors_written = parse_diskstats_line(line)
-                if disk in self.disks:
-                    self.diskstats[disk] = DiskSectors(
-                        sectors_read=sectors_read,
-                        sectors_written=sectors_written
-                    )
 
     def compare(self):
         """Compare disk stats"""
