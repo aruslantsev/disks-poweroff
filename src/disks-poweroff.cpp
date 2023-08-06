@@ -23,6 +23,19 @@ If not, see <https://www.gnu.org/licenses/>.
 #include <boost/regex.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/ini_parser.hpp>
+#include <boost/log/trivial.hpp>
+
+
+template <typename Iter>
+std::string join(Iter begin, Iter end, std::string const& separator)
+{
+  std::ostringstream result;
+  if (begin != end)
+    result << *begin++;
+  while (begin != end)
+    result << separator << *begin++;
+  return result.str();
+}
 
 
 enum states {
@@ -90,15 +103,33 @@ class DisksPoweroff {
             // parse config
             boost::property_tree::ptree property_tree;
             boost::property_tree::ini_parser::read_ini(config_path, property_tree);
+
             // get all parameters from config
             polling_interval = property_tree.get<int>("disks_poweroff.polling_interval", DEFAULT_POLLING_INTERVAL);
             timeout = property_tree.get<int>("disks_poweroff.timeout", DEFAULT_TIMEOUT);
             std::string devices_string = property_tree.get<std::string>("disks_poweroff.devices", std::string());
             std::vector<std::string> config_devices = boost::split(devices, devices_string, boost::is_any_of(","));
+
             // find all disks in /dev
-            for (const auto & entry : std::filesystem::directory_iterator("/dev"))
-                std::cout << entry.path() << std::endl;
+            std::vector<std::string> available_devices;
+            for (const auto & entry : std::filesystem::directory_iterator("/dev")) {
+                std::string device = entry.path();
+                device = normalize_name(device);
+                if (boost::regex_match(device, boost::regex("[sh]d[a-z]")))
+                    available_devices.push_back(device);
+            };
+
             // intersect config devices and available disks
+            if (config_devices.size() == 0)
+                config_devices = available_devices;
+
+            for (const auto & element : available_devices) {
+                if (std::find(config_devices.begin(), config_devices.end(), element) != config_devices.end())
+                    devices.push_back(element);
+            };
+            BOOST_LOG_TRIVIAL(info) << "Starting disks_poweroff";
+            BOOST_LOG_TRIVIAL(info) << "polling interval: " << polling_interval << ", timeout: " << timeout;
+            BOOST_LOG_TRIVIAL(info) << "devices: " << join(devices.begin(), devices.end(), ", ");
         };
 
         void parse_stats() {};
@@ -118,6 +149,11 @@ class DisksPoweroff {
         };
 };
 
+// BOOST_LOG_TRIVIAL(debug) << "A debug severity message";
+// BOOST_LOG_TRIVIAL(info) << "An informational severity message";
+// BOOST_LOG_TRIVIAL(warning) << "A warning severity message";
+// BOOST_LOG_TRIVIAL(error) << "An error severity message";
+// BOOST_LOG_TRIVIAL(fatal) << "A fatal severity message";
 
 int main(int argc, char *argv[]) {
     if (argc != 2) {
@@ -127,11 +163,13 @@ int main(int argc, char *argv[]) {
     std::string disk, written, read;
 
     DisksPoweroff disks_poweroff(argv[1]);
-    disks_poweroff.run();
+    
 
     tie(disk, read, written) = parse_line(" 253       0 dm-0 4427735 0 764012960 1975224 10010485 0 1190249536 120592768 0 7406036 122645676 136166 0 460220616 77684 0 0");
     std::cout << disk << " " << read << " " <<  written << "\n";
     std::cout << normalize_name("/dev/SDA ") << "\n";
+
+    disks_poweroff.run();
     return 0;
 }
 
@@ -142,31 +180,6 @@ int main(int argc, char *argv[]) {
 class DisksPowerOff:
     def __init__(self, configfile: str):
         """Parse config"""
-        syslog.openlog(ident=PROGRAM_NAME, facility=syslog.LOG_DAEMON)
-
-        possible_devices = [dev for dev in os.listdir('/dev') if re.match(r"[sh]d[a-z]\Z", dev)]
-        try:
-            disks = config[PROGRAM_NAME][DEVICES].strip().split(",")
-        except KeyError:
-            disks = possible_devices
-            syslog.syslog(
-                syslog.LOG_WARNING,
-                f"Missing '{DEVICES}' section in config. Using all possible devices"
-            )
-
-        disks = [normalize_name(disk) for disk in disks]
-        self.disks = [disk for disk in disks if disk in possible_devices]
-
-        syslog.syslog(syslog.LOG_INFO, f"Working with disks: {', '.join(self.disks)}")
-
-        syslog.syslog(
-            syslog.LOG_INFO,
-            (
-                "Running with parameters: "
-                + f"timeout={self.timeout}, polling_interval={self.polling_interval}"
-            )
-        )
-
         self.diskstats: Dict[str, DiskSectors] = {}
         self.diskstats_prev: Dict[str, DiskSectors] = {}
         self.disk_states: Dict[str, DiskState] = {}
