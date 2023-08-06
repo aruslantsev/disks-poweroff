@@ -18,8 +18,11 @@ If not, see <https://www.gnu.org/licenses/>.
 #include <iostream>
 #include <chrono>
 #include <thread>
+#include <filesystem>
 #include <boost/algorithm/string.hpp>
 #include <boost/regex.hpp>
+#include <boost/property_tree/ptree.hpp>
+#include <boost/property_tree/ini_parser.hpp>
 
 
 enum states {
@@ -75,22 +78,41 @@ std::string normalize_name(std::string disk) {
 
 
 class DisksPoweroff {
+    private:
+        const int DEFAULT_TIMEOUT = 1800;
+        const int DEFAULT_POLLING_INTERVAL = 10;
     public:
         int polling_interval;
+        int timeout;
         std::vector<std::string> devices;
-        DisksPoweroff(std::string config_path)
-        {
+
+        DisksPoweroff(std::string config_path) {
+            // parse config
+            boost::property_tree::ptree property_tree;
+            boost::property_tree::ini_parser::read_ini(config_path, property_tree);
+            // get all parameters from config
+            polling_interval = property_tree.get<int>("disks_poweroff.polling_interval", DEFAULT_POLLING_INTERVAL);
+            timeout = property_tree.get<int>("disks_poweroff.timeout", DEFAULT_TIMEOUT);
+            std::string devices_string = property_tree.get<std::string>("disks_poweroff.devices", std::string());
+            std::vector<std::string> config_devices = boost::split(devices, devices_string, boost::is_any_of(","));
+            // find all disks in /dev
+            for (const auto & entry : std::filesystem::directory_iterator("/dev"))
+                std::cout << entry.path() << std::endl;
+            // intersect config devices and available disks
         };
-        void parse_stats(){};
-        void compare_state(){};
-        void send_cmd(){};
+
+        void parse_stats() {};
+
+        void compare_state() {};
+
+        void send_cmd() {};
+
         void run(){
             while (true) {
                 parse_stats();
                 compare_state();
                 send_cmd();
                 polling_interval = 5;
-                std::cout << "Cycle\n";
                 std::this_thread::sleep_for(std::chrono::seconds(polling_interval));
             }
         };
@@ -99,7 +121,7 @@ class DisksPoweroff {
 
 int main(int argc, char *argv[]) {
     if (argc != 2) {
-        std::cout << "Usage: " << argv[0] << " config_path" << "\n";
+        std::cout << "Usage: " << argv[0] << " config_path" << std::endl;
         return 1;
     }
     std::string disk, written, read;
@@ -116,24 +138,12 @@ int main(int argc, char *argv[]) {
 
 
 /*
-PROGRAM_NAME = "disks-poweroff"
-DEVICES = "devices"
-TIMEOUT = "timeout"
-POLLING_INTERVAL = "polling_interval"
-
-DEFAULT_TIMEOUT = 1800
-DEFAULT_POLLING_INTERVAL = 10
-
-
 
 class DisksPowerOff:
     def __init__(self, configfile: str):
         """Parse config"""
         syslog.openlog(ident=PROGRAM_NAME, facility=syslog.LOG_DAEMON)
-        config = configparser.ConfigParser()
-        config.read(configfile)
 
-        # Find all physical disks. Read disks from config. If none passed, use all
         possible_devices = [dev for dev in os.listdir('/dev') if re.match(r"[sh]d[a-z]\Z", dev)]
         try:
             disks = config[PROGRAM_NAME][DEVICES].strip().split(",")
@@ -148,36 +158,6 @@ class DisksPowerOff:
         self.disks = [disk for disk in disks if disk in possible_devices]
 
         syslog.syslog(syslog.LOG_INFO, f"Working with disks: {', '.join(self.disks)}")
-
-        # If the disk is idle during timeout, we will turn it off
-        timeout = config[PROGRAM_NAME].get(TIMEOUT, str(DEFAULT_TIMEOUT))
-        try:
-            self.timeout = int(timeout)
-        except ValueError:
-            syslog.syslog(
-                syslog.LOG_WARNING,
-                (
-                    f"Invalid config record for '{TIMEOUT}'"
-                    + f"setting default value {DEFAULT_TIMEOUT} seconds"
-                )
-            )
-            self.timeout = DEFAULT_TIMEOUT
-
-        # Polling interval in seconds
-        polling_interval = config[PROGRAM_NAME].get(
-            POLLING_INTERVAL, str(DEFAULT_POLLING_INTERVAL)
-        )  # 5 seconds
-        try:
-            self.polling_interval = int(polling_interval)
-        except ValueError:
-            syslog.syslog(
-                syslog.LOG_WARNING,
-                (
-                    f"Invalid config record for '{POLLING_INTERVAL}', "
-                    + f"setting default value {DEFAULT_POLLING_INTERVAL} seconds"
-                )
-            )
-            self.polling_interval = DEFAULT_POLLING_INTERVAL
 
         syslog.syslog(
             syslog.LOG_INFO,
