@@ -28,6 +28,9 @@ If not, see <https://www.gnu.org/licenses/>.
 #include <boost/log/trivial.hpp>
 
 
+const int ACTIVE = 0, IDLE = 1, POWEROFF = 2;
+
+
 template <typename Iter>
 std::string join(Iter begin, Iter end, std::string const& separator)
 {
@@ -40,23 +43,21 @@ std::string join(Iter begin, Iter end, std::string const& separator)
 }
 
 
-enum states {
-    ACTIVE,
-    IDLE,
-    POWEROFF,
-};
-
 
 struct DiskState {
-    enum states state;
-    double timestamp;
+    int state;
+    std::time_t timestamp;
 
     DiskState() {};
-    DiskState(states init_state, double init_timestamp) {
+    DiskState(int init_state, std::time_t init_timestamp) {
         state = init_state;
         timestamp = init_timestamp;
     };
 };
+
+bool operator==(const DiskState& lhs, const DiskState& rhs) {
+    return lhs.state == rhs.state;
+}
 
 
 struct DiskSectors {
@@ -69,6 +70,10 @@ struct DiskSectors {
         sectors_written = init_sectors_written;
     };
 };
+
+bool operator==(const DiskSectors& lhs, const DiskSectors& rhs) {
+    return (lhs.sectors_read == rhs.sectors_read) & (lhs.sectors_written == rhs.sectors_written);
+}
 
 
 std::tuple<std::string, std::string, std::string> parse_line(std::string line) {
@@ -125,7 +130,7 @@ class DisksPoweroff {
 
             // find all disks in /dev
             std::vector<std::string> available_devices;
-            for (const auto & entry : std::filesystem::directory_iterator("/dev")) {
+            for (const auto &entry: std::filesystem::directory_iterator("/dev")) {
                 std::string device = entry.path();
                 device = normalize_name(device);
                 // if (boost::regex_match(device, boost::regex("[sh]d[a-z]")))
@@ -147,7 +152,7 @@ class DisksPoweroff {
 
             std::cout << "Devices in config: " << join(config_devices.begin(), config_devices.end(), ", ") << std::endl;
 
-            for (const auto & element : available_devices) {
+            for (const auto &element: available_devices) {
                 if (std::find(config_devices.begin(), config_devices.end(), element) != config_devices.end())
                     devices.push_back(element);
             };
@@ -174,7 +179,7 @@ class DisksPoweroff {
             std::ifstream infile("/proc/diskstats");
             std::string device, sectors_read, sectors_written;
             while (std::getline(infile, line)) {
-                tie(device, sectors_read, sectors_written) = parse_line(line);
+                std::tie(device, sectors_read, sectors_written) = parse_line(line);
                 if (std::find(devices.begin(), devices.end(), device) != devices.end()) {
                     diskstats[device] = DiskSectors(sectors_read, sectors_written);
                 }
@@ -183,35 +188,31 @@ class DisksPoweroff {
         };
 
         void compare_state() {
-            for (const auto &elem : diskstats) {
-                std::string disk = elem.first;
+            for (const auto &disk : devices) {
+                if (
+                    (diskstats.find(disk) != diskstats.end()) 
+                    && (diskstats_prev.find(disk) != diskstats_prev.end()) 
+                    && (diskstats_prev[disk] == diskstats[disk])
+                ) {
+                    // Disk is active but nothing was read or written
+                    // Skip if disk is IDLE or POWEROFF
+                    if (disk_states[disk].state == ACTIVE) {
+                        disk_states[disk] = DiskState(IDLE, std::time(0));
+                        std::cout << "Disk " << disk << " changed state to IDLE" << std::endl;
+                    }
+                } else {
+                    if (
+                        (diskstats.find(disk) == diskstats.end()) 
+                        || (disk_states[disk].state != ACTIVE)
+                    ) {
+                        disk_states[disk] = DiskState(ACTIVE, std::time(0));
+                        std::cout << "Disk " << disk << " changed state to ACTIVE" << std::endl;
+                    }
+                }
             }
 
         };
-/*
-    def compare(self):
-        """Compare disk stats"""
-        for disk in self.disks:
-            # stats (sectors written or sectors read) not changed and not empty
-            if (
-                disk in self.diskstats
-                and disk in self.diskstats_prev
-                and (self.diskstats_prev[disk] == self.diskstats[disk])
-            ):
-                # disk not in idle or poweroff state
-                if (
-                        (self.disk_states[disk].state != IDLE)
-                        and (self.disk_states[disk].state != POWEROFF)
-                ):
-                    # it's time to change state
-                    self.disk_states[disk] = DiskState(state=IDLE, timestamp=time.time())
-                    syslog.syslog(syslog.LOG_DEBUG, f"Disk {disk} state changed to {IDLE}")
-            else:
-                # state changed
-                if disk not in self.disk_states or self.disk_states[disk].state != ACTIVE:
-                    self.disk_states[disk] = DiskState(state=ACTIVE, timestamp=time.time())
-                    syslog.syslog(syslog.LOG_DEBUG, f"Disk {disk} state changed to {ACTIVE}")
-*/
+
         void send_cmd() {};
 
         void run() {
@@ -219,7 +220,8 @@ class DisksPoweroff {
                 parse_stats();
                 compare_state();
                 send_cmd();
-                polling_interval = 5;  // FIXME
+                polling_interval = 5;  // debug
+                std::cout << "Cycle" << std::endl;  // debug
                 std::this_thread::sleep_for(std::chrono::seconds(polling_interval));
             }
         };
