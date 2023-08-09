@@ -21,7 +21,7 @@ import syslog
 import time
 from typing import Any, Dict, Tuple
 
-PROGRAM_NAME = "disks-poweroff"
+PROGRAM_NAME = "disks_poweroff"
 DEVICES = "devices"
 TIMEOUT = "timeout"
 POLLING_INTERVAL = "polling_interval"
@@ -97,7 +97,7 @@ def normalize_name(disk: str) -> str:
     """Normalize disk name"""
     disk = disk.strip()
     if "/" in disk:  # e.g. /dev/sda instead of sda
-        disk = disk.split("/")[-1]
+        disk = disk.split("/")[-1].strip()
     return disk
 
 
@@ -113,6 +113,7 @@ class DisksPowerOff:
         possible_devices = [dev for dev in os.listdir('/dev') if re.match(r"[sh]d[a-z]\Z", dev)]
         try:
             disks = config[PROGRAM_NAME][DEVICES].strip().split(",")
+            disks = [disk.strip() for disk in disks]
         except KeyError:
             disks = possible_devices
             syslog.syslog(
@@ -121,9 +122,9 @@ class DisksPowerOff:
             )
 
         disks = [normalize_name(disk) for disk in disks]
-        self.disks = [disk for disk in disks if disk in possible_devices]
+        self.devices = [disk for disk in disks if disk in possible_devices]
 
-        syslog.syslog(syslog.LOG_INFO, f"Working with disks: {', '.join(self.disks)}")
+        syslog.syslog(syslog.LOG_INFO, f"Working with disks: {', '.join(self.devices)}")
 
         # If the disk state is idle during timeout, it will be turned off
         timeout = config[PROGRAM_NAME].get(TIMEOUT, str(DEFAULT_TIMEOUT))
@@ -175,7 +176,7 @@ class DisksPowerOff:
         with open("/proc/diskstats", "r") as fd:
             for line in fd.readlines():
                 disk, sectors_read, sectors_written = parse_diskstats_line(line)
-                if disk in self.disks:
+                if disk in self.devices:
                     self.diskstats[disk] = DiskSectors(
                         sectors_read=sectors_read,
                         sectors_written=sectors_written
@@ -183,29 +184,28 @@ class DisksPowerOff:
 
     def compare_stats(self):
         """Compare disk stats"""
-        for disk in self.disks:
+        for disk in self.devices:
             # stats (sectors written or sectors read) not changed and not empty
             if (
                 disk in self.diskstats
                 and disk in self.diskstats_prev
                 and (self.diskstats_prev[disk] == self.diskstats[disk])
             ):
-                # disk not in idle or poweroff state
-                if (
-                        (self.disk_states[disk].state != IDLE)
-                        and (self.disk_states[disk].state != POWEROFF)
-                ):
+                # disk was active but nothing was read or recorded
+                if self.disk_states[disk].state == ACTIVE:
                     # it's time to change state
                     self.disk_states[disk] = DiskState(state=IDLE, timestamp=time.time())
                     syslog.syslog(syslog.LOG_DEBUG, f"Disk {disk} state changed to {IDLE}")
             else:
-                # state changed
+                # disk appeared/removed from diskstats/data was read or written -> state changed
+                # good idea to check if disk is in diskstats now i.e. presented in the system, 
+                # but nothing will fail if the active state will be kept for the disk
                 if disk not in self.disk_states or self.disk_states[disk].state != ACTIVE:
                     self.disk_states[disk] = DiskState(state=ACTIVE, timestamp=time.time())
                     syslog.syslog(syslog.LOG_DEBUG, f"Disk {disk} state changed to {ACTIVE}")
 
     def send_cmd(self):
-        for disk in self.disks:
+        for disk in self.devices:
             if disk in self.disk_states:
                 disk_state = self.disk_states[disk]
                 if (
@@ -237,9 +237,9 @@ class DisksPowerOff:
                         syslog.syslog(syslog.LOG_DEBUG, f"Disk {disk} state changed to {POWEROFF}")
                     self.disk_states[disk].state = POWEROFF
 
-                    # Dome drives are need to be repolled, because number of read and written
-                    # sectors increases after smartctl or hdparm call.
-                    # For example, my Samsung 850 EVO needs this.
+                    # Some drives are need to be polled again to update diskstats, because
+                    # number of read and written sectors may increase after smartctl or hdparm call.
+                    # But also it is not reliable strategy.
 
     def run(self):
         while True:
