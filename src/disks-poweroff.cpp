@@ -182,8 +182,36 @@ class DisksPoweroff {
 
         };
 
-        void compare_state() {};
+        void compare_state() {
+            for (const auto &elem : diskstats) {
+                std::string disk = elem.first;
+            }
 
+        };
+/*
+    def compare(self):
+        """Compare disk stats"""
+        for disk in self.disks:
+            # stats (sectors written or sectors read) not changed and not empty
+            if (
+                disk in self.diskstats
+                and disk in self.diskstats_prev
+                and (self.diskstats_prev[disk] == self.diskstats[disk])
+            ):
+                # disk not in idle or poweroff state
+                if (
+                        (self.disk_states[disk].state != IDLE)
+                        and (self.disk_states[disk].state != POWEROFF)
+                ):
+                    # it's time to change state
+                    self.disk_states[disk] = DiskState(state=IDLE, timestamp=time.time())
+                    syslog.syslog(syslog.LOG_DEBUG, f"Disk {disk} state changed to {IDLE}")
+            else:
+                # state changed
+                if disk not in self.disk_states or self.disk_states[disk].state != ACTIVE:
+                    self.disk_states[disk] = DiskState(state=ACTIVE, timestamp=time.time())
+                    syslog.syslog(syslog.LOG_DEBUG, f"Disk {disk} state changed to {ACTIVE}")
+*/
         void send_cmd() {};
 
         void run() {
@@ -227,28 +255,7 @@ int main(int argc, char *argv[]) {
 
 class DisksPowerOff:
 
-    def compare(self):
-        """Compare disk stats"""
-        for disk in self.disks:
-            # stats (sectors written or sectors read) not changed and not empty
-            if (
-                disk in self.diskstats
-                and disk in self.diskstats_prev
-                and (self.diskstats_prev[disk] == self.diskstats[disk])
-            ):
-                # disk not in idle or poweroff state
-                if (
-                        (self.disk_states[disk].state != IDLE)
-                        and (self.disk_states[disk].state != POWEROFF)
-                ):
-                    # it's time to change state
-                    self.disk_states[disk] = DiskState(state=IDLE, timestamp=time.time())
-                    syslog.syslog(syslog.LOG_DEBUG, f"Disk {disk} state changed to {IDLE}")
-            else:
-                # state changed
-                if disk not in self.disk_states or self.disk_states[disk].state != ACTIVE:
-                    self.disk_states[disk] = DiskState(state=ACTIVE, timestamp=time.time())
-                    syslog.syslog(syslog.LOG_DEBUG, f"Disk {disk} state changed to {ACTIVE}")
+
 
     def poweroff(self):
         for disk in self.disks:
