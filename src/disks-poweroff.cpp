@@ -41,7 +41,7 @@ std::string join(Iter begin, Iter end, std::string const& separator)
   while (begin != end)
     result << separator << *begin++;
   return result.str();
-}
+};
 
 
 
@@ -56,9 +56,10 @@ struct DiskState {
     };
 };
 
+
 bool operator==(const DiskState& lhs, const DiskState& rhs) {
     return lhs.state == rhs.state;
-}
+};
 
 
 struct DiskSectors {
@@ -72,9 +73,10 @@ struct DiskSectors {
     };
 };
 
+
 bool operator==(const DiskSectors& lhs, const DiskSectors& rhs) {
     return (lhs.sectors_read == rhs.sectors_read) & (lhs.sectors_written == rhs.sectors_written);
-}
+};
 
 
 std::tuple<std::string, std::string, std::string> parse_line(std::string line) {
@@ -126,7 +128,9 @@ class DisksPoweroff {
             boost::property_tree::ini_parser::read_ini(config_path, property_tree);
 
             // get all parameters from config
-            polling_interval = property_tree.get<int>("disks_poweroff.polling_interval", DEFAULT_POLLING_INTERVAL);
+            polling_interval = property_tree.get<int>(
+                "disks_poweroff.polling_interval", DEFAULT_POLLING_INTERVAL
+            );
             timeout = property_tree.get<int>("disks_poweroff.timeout", DEFAULT_TIMEOUT);
 
             // find all disks in /dev
@@ -134,16 +138,20 @@ class DisksPoweroff {
             for (const auto &entry: std::filesystem::directory_iterator("/dev")) {
                 std::string device = entry.path();
                 device = normalize_name(device);
-                // if (boost::regex_match(device, boost::regex("[sh]d[a-z]")))
-                if (boost::regex_match(device, boost::regex("dm-[0-9]")))
+                if (boost::regex_match(device, boost::regex("[sh]d[a-z]")))
                     available_devices.push_back(device);
             }
 
-            std::cout << "Available devices: "  << join(available_devices.begin(), available_devices.end(), ", ") << std::endl;
+            std::cout 
+                << "Available devices: " 
+                << join(available_devices.begin(), available_devices.end(), ", ") 
+                << std::endl;
 
             // intersect config devices and available disks
             std::vector<std::string> config_devices;
-            std::string devices_string = property_tree.get<std::string>("disks_poweroff.devices", std::string());
+            std::string devices_string = property_tree.get<std::string>(
+                "disks_poweroff.devices", std::string()
+            );
             if (devices_string != "") {
                 config_devices = boost::split(devices, devices_string, boost::is_any_of(","));
             } else {
@@ -151,15 +159,27 @@ class DisksPoweroff {
                 config_devices = available_devices;
             }
 
-            std::cout << "Devices in config: " << join(config_devices.begin(), config_devices.end(), ", ") << std::endl;
+            std::cout 
+                << "Devices in config: " 
+                << join(config_devices.begin(), config_devices.end(), ", ") 
+                << std::endl;
 
             for (const auto &element: available_devices) {
-                if (std::find(config_devices.begin(), config_devices.end(), element) != config_devices.end())
+                if (
+                    std::find(
+                        config_devices.begin(), config_devices.end(), element
+                    ) != config_devices.end()
+                )
                     devices.push_back(element);
             }
-            // BOOST_LOG_TRIVIAL(info) << "Starting disks_poweroff";
+
             std::cout << "Starting disks_poweroff" << std::endl;
-            std::cout << "polling interval: " << polling_interval << ", timeout: " << timeout << std::endl;
+            std::cout 
+                << "polling interval: " 
+                << polling_interval 
+                << ", timeout: " 
+                << timeout 
+                << std::endl;
             std::cout << "devices: " << join(devices.begin(), devices.end(), ", ") << std::endl;
 
             config_devices.clear();
@@ -220,15 +240,23 @@ class DisksPoweroff {
                         ((disk_state.state == IDLE) || (disk_state.state == POWEROFF))
                         && ((std::time(0) - disk_state.timestamp) > timeout)
                     ) {
-                        int status = boost::process::system("smartctl", "-n", "standby", "/dev/" + disk);
+                        int status = boost::process::system(
+                            "smartctl", "-n", "standby", "/dev/" + disk
+                        );
                         if (status != 2) {
                             std::cout << "smartctl returned 2" << std::endl;
-                            int hdparm_status = boost::process::system("hdparm", "-yY", "/dev/" + disk);
+                            int hdparm_status = boost::process::system(
+                                "hdparm", "-yY", "/dev/" + disk\
+                            );
                             if (hdparm_status != 0)
                                 std::cout << "hdparm failed for /dev/" << disk << std::endl;
                         }
                         if (disk_states[disk].state != POWEROFF) {
-                            std::cout << "Disk /dev/" << disk << " changed state to POWEROFF" << std::endl;
+                            std::cout 
+                                << "Disk /dev/" 
+                                << disk 
+                                << " changed state to POWEROFF" 
+                                << std::endl;
                         }
                         disk_states[disk].state = POWEROFF;
                     }
@@ -242,18 +270,11 @@ class DisksPoweroff {
                 parse_stats();
                 compare_state();
                 send_cmd();
-                polling_interval = 5;  // debug
-                std::cout << "Cycle" << std::endl;  // debug
                 std::this_thread::sleep_for(std::chrono::seconds(polling_interval));
             }
         };
 };
 
-// BOOST_LOG_TRIVIAL(debug) << "A debug severity message";
-// BOOST_LOG_TRIVIAL(info) << "An informational severity message";
-// BOOST_LOG_TRIVIAL(warning) << "A warning severity message";
-// BOOST_LOG_TRIVIAL(error) << "An error severity message";
-// BOOST_LOG_TRIVIAL(fatal) << "A fatal severity message";
 
 int main(int argc, char *argv[]) {
     if (argc != 2) {
@@ -267,3 +288,10 @@ int main(int argc, char *argv[]) {
     disks_poweroff.run();
     return 0;
 }
+
+
+// BOOST_LOG_TRIVIAL(debug) << "A debug severity message";
+// BOOST_LOG_TRIVIAL(info) << "An informational severity message";
+// BOOST_LOG_TRIVIAL(warning) << "A warning severity message";
+// BOOST_LOG_TRIVIAL(error) << "An error severity message";
+// BOOST_LOG_TRIVIAL(fatal) << "A fatal severity message";
