@@ -25,6 +25,7 @@ If not, see <https://www.gnu.org/licenses/>.
 #include <boost/regex.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/ini_parser.hpp>
+#include <boost/process.hpp>
 #include <boost/log/trivial.hpp>
 
 
@@ -96,7 +97,7 @@ std::tuple<std::string, std::string, std::string> parse_line(std::string line) {
     std::string &sectors_read = splitted[5];
     std::string &sectors_written = splitted[9];
     return {diskname, sectors_read, sectors_written};
-};
+}
 
 
 std::string normalize_name(std::string disk) {
@@ -105,7 +106,7 @@ std::string normalize_name(std::string disk) {
     boost::algorithm::to_lower(disk);
     boost::split(splitted, disk, boost::is_any_of("/"));
     return splitted.back();
-};
+}
 
 
 class DisksPoweroff {
@@ -136,9 +137,9 @@ class DisksPoweroff {
                 // if (boost::regex_match(device, boost::regex("[sh]d[a-z]")))
                 if (boost::regex_match(device, boost::regex("dm-[0-9]")))
                     available_devices.push_back(device);
-            };
+            }
 
-            std::cout << "Available devices: " << join(available_devices.begin(), available_devices.end(), ", ") << std::endl;
+            std::cout << "Available devices: "  << join(available_devices.begin(), available_devices.end(), ", ") << std::endl;
 
             // intersect config devices and available disks
             std::vector<std::string> config_devices;
@@ -148,14 +149,14 @@ class DisksPoweroff {
             } else {
                 std::cout << "Devices section in config is empty" << std::endl;
                 config_devices = available_devices;
-            };
+            }
 
             std::cout << "Devices in config: " << join(config_devices.begin(), config_devices.end(), ", ") << std::endl;
 
             for (const auto &element: available_devices) {
                 if (std::find(config_devices.begin(), config_devices.end(), element) != config_devices.end())
                     devices.push_back(element);
-            };
+            }
             // BOOST_LOG_TRIVIAL(info) << "Starting disks_poweroff";
             std::cout << "Starting disks_poweroff" << std::endl;
             std::cout << "polling interval: " << polling_interval << ", timeout: " << timeout << std::endl;
@@ -166,7 +167,7 @@ class DisksPoweroff {
             
             // delete &config_devices;
             // delete &available_devices;
-        };
+        }
 
         void parse_stats() {
             diskstats_prev.clear();
@@ -184,8 +185,7 @@ class DisksPoweroff {
                     diskstats[device] = DiskSectors(sectors_read, sectors_written);
                 }
             }
-
-        };
+        }
 
         void compare_state() {
             for (const auto &disk : devices) {
@@ -210,10 +210,32 @@ class DisksPoweroff {
                     }
                 }
             }
+        }
 
-        };
+        void send_cmd() {
+            for (const auto &disk : devices) {
+                if (disk_states.find(disk) != disk_states.end()) {
+                    DiskState disk_state = disk_states[disk];
+                    if (
+                        ((disk_state.state == IDLE) || (disk_state.state == POWEROFF))
+                        && ((std::time(0) - disk_state.timestamp) > timeout)
+                    ) {
+                        int status = boost::process::system("smartctl", "-n", "standby", "/dev/" + disk);
+                        if (status != 2) {
+                            std::cout << "smartctl returned 2" << std::endl;
+                            int hdparm_status = boost::process::system("hdparm", "-yY", "/dev/" + disk);
+                            if (hdparm_status != 0)
+                                std::cout << "hdparm failed for /dev/" << disk << std::endl;
+                        }
+                        if (disk_states[disk].state != POWEROFF) {
+                            std::cout << "Disk /dev/" << disk << " changed state to POWEROFF" << std::endl;
+                        }
+                        disk_states[disk].state = POWEROFF;
+                    }
+                }
+            }
+        }
 
-        void send_cmd() {};
 
         void run() {
             while (true) {
@@ -241,59 +263,7 @@ int main(int argc, char *argv[]) {
     std::string disk, written, read;
 
     DisksPoweroff disks_poweroff(argv[1]);
-    
-
-    tie(disk, read, written) = parse_line(" 253       0 dm-0 4427735 0 764012960 1975224 10010485 0 1190249536 120592768 0 7406036 122645676 136166 0 460220616 77684 0 0");
-    std::cout << disk << " " << read << " " <<  written << "\n";
-    std::cout << normalize_name("/dev/SDA ") << "\n";
 
     disks_poweroff.run();
     return 0;
 }
-
-
-
-/*
-
-class DisksPowerOff:
-
-
-
-    def poweroff(self):
-        for disk in self.disks:
-            if disk in self.disk_states:
-                disk_state = self.disk_states[disk]
-                if (
-                    (
-                        (disk_state.state == IDLE)
-                        or (disk_state.state == POWEROFF)
-                    )
-                    and (time.time() - disk_state.timestamp >= self.timeout)
-                ):
-                    # Recheck if disk is sleeping every time. It may wake up unexpectedly
-                    smartctl = subprocess.Popen(
-                        ["smartctl", "-n", "standby", f"/dev/{disk}"],
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.STDOUT)
-                    smartctl.communicate()
-
-                    if smartctl.returncode != 2:  # not sleeping
-                        # WARNING: also returncode == 2 when smartctl failed
-                        hdparm = subprocess.Popen(
-                            ["hdparm", "-yY", f"/dev/{disk}"],
-                            stdout=subprocess.DEVNULL,
-                            stderr=subprocess.STDOUT)
-                        hdparm.communicate()
-
-                        if hdparm.returncode != 0:
-                            syslog.syslog(syslog.LOG_ERR, f"hdparm failed for {disk}")
-
-                    if self.disk_states[disk].state != POWEROFF:
-                        syslog.syslog(syslog.LOG_DEBUG, f"Disk {disk} state changed to {POWEROFF}")
-                    self.disk_states[disk].state = POWEROFF
-
-                    # Dome drives are need to be repolled, because number of read and written
-                    # sectors increases after smartctl or hdparm call.
-                    # For example, my Samsung 850 EVO needs this.
-
-*/
