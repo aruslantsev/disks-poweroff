@@ -8,3 +8,6 @@ strip:
 
 clean:
 	rm -rf *.o disks-poweroff
+
+rpm:
+	rpmbuild -ba --build-in-place disks-poweroff.spec
