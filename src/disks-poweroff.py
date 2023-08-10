@@ -197,8 +197,8 @@ class DisksPowerOff:
                     self.disk_states[disk] = DiskState(state=IDLE, timestamp=time.time())
                     syslog.syslog(syslog.LOG_DEBUG, f"Disk {disk} state changed to {IDLE}")
             else:
-                # disk appeared/removed from diskstats/data was read or written -> state changed
-                # good idea to check if disk is in diskstats now i.e. presented in the system, 
+                # disk appeared/disappeared from diskstats/data was read or written -> state changed
+                # good idea to check if disk is in diskstats now i.e. presented in the system,
                 # but nothing will fail if the active state will be kept for the disk
                 if disk not in self.disk_states or self.disk_states[disk].state != ACTIVE:
                     self.disk_states[disk] = DiskState(state=ACTIVE, timestamp=time.time())
