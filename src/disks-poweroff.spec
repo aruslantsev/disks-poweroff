@@ -26,6 +26,10 @@ install -D -m 755 disks-poweroff.py %{buildroot}%{_bindir}/disks-poweroff.py
 %config %{_sysconfdir}/disks-poweroff.conf
 
 %changelog
+* Tue Aug 15 2023 Andrei Ruslantsev - 0.6
+- Refactor code
+- Switch to c++
+
 * Sun Jul 30 2023 Andrei Ruslantsev - 0.5
 - Refactor code
 
