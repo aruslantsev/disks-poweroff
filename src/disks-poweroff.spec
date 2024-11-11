@@ -1,5 +1,5 @@
-Name:       disks-poweroff
-Version:    0.5
+Name:       disks-spindown
+Version:    0.7
 Release:    1%{?dist}
 Summary:    Stop inactive disks
 License:    GPLv3+
@@ -11,21 +11,25 @@ Requires:   hdparm
 %define _unitdir /usr/lib/systemd/system
 
 %description
-Stop inactive disks after timeout
+Spins down inactive disks after timeout
 
 %install
-install -D -m 644 disks-poweroff.service %{buildroot}%{_unitdir}/disks-poweroff.service
-install -D -m 644 disks-poweroff.conf %{buildroot}%{_sysconfdir}/disks-poweroff.conf
-install -D -m 644 disks-poweroff.conf.example %{buildroot}%{_sysconfdir}/disks-poweroff.conf.example
-install -D -m 755 disks-poweroff.py %{buildroot}%{_bindir}/disks-poweroff.py
+install -D -m 644 disks-spindown.service %{buildroot}%{_unitdir}/disks-spindown.service
+install -D -m 644 disks-spindown.conf %{buildroot}%{_sysconfdir}/disks-spindown.conf
+install -D -m 644 disks-spindown.conf.example %{buildroot}%{_sysconfdir}/disks-spindown.conf.example
+install -D -m 755 disks-spindown.sh %{buildroot}%{_bindir}/disks-spindown.sh
 
 %files
-%{_unitdir}/disks-poweroff.service
-%{_sysconfdir}/disks-poweroff.conf.example
-%{_bindir}/disks-poweroff.py
-%config %{_sysconfdir}/disks-poweroff.conf
+%{_unitdir}/disks-spindown.service
+%{_sysconfdir}/disks-spindown.conf.example
+%{_bindir}/disks-spindown.sh
+%config %{_sysconfdir}/disks-spindown.conf
 
 %changelog
+* Mon Nov 11 2024 Andrei Ruslantsev - 0.7
+- Using bash
+- Simplify code
+
 * Tue Aug 15 2023 Andrei Ruslantsev - 0.6
 - Refactor code
 - Switch to c++

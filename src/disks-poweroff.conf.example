@@ -1,4 +1,0 @@
-[disks_poweroff]
-devices=sda,sdb,sdc,sdd
-timeout=3600
-polling_interval=60
