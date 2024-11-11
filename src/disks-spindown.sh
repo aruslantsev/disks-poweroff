@@ -60,21 +60,21 @@ function main() {
       if [ "${previous_stats[$disk]}" != "${current_stats[$disk]}" ]; then
         # If data was read or written, update last active time
         modification_time["${disk}"]=$current_scan
-        [ "${DEBUG}" -ne 0 ] && logger -p daemon.debug ${disk} is active
+        logger -p daemon.debug ${disk} is active
       else
         # If nothing changed, count time from last activity and compare to timeout
         timediff=$(($current_scan-modification_time["${disk}"]))
-        [ "${DEBUG}" -ne 0 ] && logger -p daemon.debug ${disk} is inactive for ${timediff} seconds
+        logger -p daemon.debug ${disk} is inactive for ${timediff} seconds
         if [ $timediff -ge $timeout ]; then
           # time difference if greater than timeout. Check if disk is already sleeping
           status=$(smartctl -n standby /dev/${disk} >> /dev/null; echo $?)
           if [ $status != 2 ]; then
             # Status is not 2: disk is not sleeping
-            [ "${DEBUG}" -ne 0 ] && logger -p daemon.debug ${disk} is going to sleep
+            logger -p daemon.debug ${disk} is going to sleep
             hdparm -yY /dev/${disk} > /dev/null
           else
             # Status 2: disk is sleeping or smartctl exited with error
-            [ "${DEBUG}" -ne 0 ] && logger -p daemon.debug ${disk} is already sleeping
+            logger -p daemon.debug ${disk} is already sleeping
           fi
         fi
       fi
