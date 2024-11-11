@@ -2,7 +2,7 @@
 Description=disks-poweroff service
 [Service]
 Type=simple
-ExecStart=/usr/libexec/platform-python /usr/bin/disks-poweroff.py /etc/disks-poweroff.conf
+ExecStart=/usr/bin/disks-spindown.sh /etc/disks-spindown.conf
 Restart=always
 RestartSec=2s
 [Install]
