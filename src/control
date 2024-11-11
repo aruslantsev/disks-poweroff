@@ -1,4 +1,4 @@
-Package: hello
+Package: disks-spindown
 Version: 0.7
 Architecture: all
 Depends: hdparm, smartmontools
