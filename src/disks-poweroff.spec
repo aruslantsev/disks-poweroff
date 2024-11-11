@@ -1,5 +1,5 @@
 Name:       disks-spindown
-Version:    0.5
+Version:    0.7
 Release:    1%{?dist}
 Summary:    Stop inactive disks
 License:    GPLv3+
@@ -11,7 +11,7 @@ Requires:   hdparm
 %define _unitdir /usr/lib/systemd/system
 
 %description
-Stop inactive disks after timeout
+Spins down inactive disks after timeout
 
 %install
 install -D -m 644 disks-spindown.service %{buildroot}%{_unitdir}/disks-spindown.service
